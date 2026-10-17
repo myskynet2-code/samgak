@@ -22,7 +22,7 @@
             android:label="압력용기 무게·센터"
             android:icon="@mipmap/ic_launcher_vessel"
             android:roundIcon="@mipmap/ic_launcher_vessel"
-            android:taskAffinity="com.myskynet2.samgak.vessel"
+            android:taskAffinity="com.myskynet2.hyunjang.vessel"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
             android:windowSoftInputMode="adjustResize">
