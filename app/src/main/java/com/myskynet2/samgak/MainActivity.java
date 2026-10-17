@@ -23,8 +23,12 @@ public class MainActivity extends Activity {
         if (savedInstanceState != null) {
             web.restoreState(savedInstanceState);
         } else {
-            web.loadUrl("file:///android_asset/index.html");
+            web.loadUrl(pageUrl());
         }
+    }
+
+    protected String pageUrl() {
+        return "file:///android_asset/index.html";
     }
 
     @Override
