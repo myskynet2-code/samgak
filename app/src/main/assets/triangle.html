@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>직각삼각형 풀이판</title>
+<style>
+/* 제도용 모눈종이 위에 삼각형 하나. 숫자 칸이 곧 그림의 이름표이고, 그 밖에 결과 칸은 따로 없음 */
+:root{
+  --bg:#f3f6f7; --grid:rgba(40,90,110,.08); --ink:#18303a; --muted:#5d7480;
+  --given:#1d4fa8; --calc:#0f7a5c; --calc-bg:#e3f3ec; --box:#ffffff; --line:#c9d6dc; --err:#b3412b;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1a1f; --grid:rgba(140,190,210,.07); --ink:#dbe7ec; --muted:#8ea5b0;
+  --given:#7fa8ff; --calc:#5fd1a8; --calc-bg:#12322a; --box:#16252c; --line:#2c4049; --err:#ff8a70; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1a1f; --grid:rgba(140,190,210,.07); --ink:#dbe7ec; --muted:#8ea5b0;
+  --given:#7fa8ff; --calc:#5fd1a8; --calc-bg:#12322a; --box:#16252c; --line:#2c4049; --err:#ff8a70; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:20px 20px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+h1{font-size:1.15rem;margin:0;text-wrap:balance}
+header p{margin:4px 0 0;font-size:.85rem;color:var(--muted)}
+.leg{display:flex;gap:12px;font-size:.78rem;color:var(--muted);margin-top:6px}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+button{font:inherit;font-size:.85rem;color:var(--ink);background:var(--box);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;flex:none}
+button:focus-visible,input:focus-visible{outline:2px solid var(--given);outline-offset:2px}
+.stage{position:relative;width:100%}
+svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.box{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;width:92px}
+.lab{font-size:.72rem;color:var(--muted);letter-spacing:.04em}
+.field{display:flex;align-items:center;width:100%;background:var(--box);border:1.5px solid var(--line);border-radius:8px;padding:0 6px}
+.field input{all:unset;width:100%;min-width:0;font-family:var(--mono);font-size:16px;font-weight:600;padding:6px 0;text-align:center;color:var(--ink)}
+.field input::placeholder{color:var(--muted);opacity:.5;font-weight:500}
+.field .u{font-family:var(--mono);color:var(--muted);font-size:.9rem}
+.box.given .field{border-color:var(--given)} .box.given input{color:var(--given)}
+.box.calc .field{border-color:var(--calc);background:var(--calc-bg)} .box.calc input{color:var(--calc)}
+.how{font-family:var(--mono);font-size:.68rem;color:var(--calc);min-height:1em;white-space:nowrap}
+.msg{position:absolute;left:0;right:0;top:0;text-align:center;font-size:.85rem;color:var(--muted)}
+.msg.err{color:var(--err)}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+<a href="index.html" style="display:inline-block;margin:0 0 6px;font-size:.9rem;color:#1d4fa8;text-decoration:none">← 계산기 고르기</a>
+  <header>
+    <div>
+      <h1>직각삼각형 풀이판</h1>
+      <p>그림 속 칸 중 아무거나 두 개만 넣으면 나머지가 그 자리에 채워집니다.</p>
+      <div class="leg"><span><i style="background:var(--given)"></i>넣은 값</span><span><i style="background:var(--calc)"></i>계산된 값</span></div>
+    </div>
+    <button id="clear" type="button">지우기</button>
+  </header>
+
+  <div class="stage" id="stage">
+    <svg id="svg" aria-hidden="true"></svg>
+    <div class="msg" id="msg"></div>
+    <div class="box" data-k="a"><span class="lab">높이</span><span class="field"><input id="f-a" inputmode="decimal" placeholder="?" aria-label="높이"></span><span class="how"></span></div>
+    <div class="box" data-k="b"><span class="lab">밑변</span><span class="field"><input id="f-b" inputmode="decimal" placeholder="?" aria-label="밑변"></span><span class="how"></span></div>
+    <div class="box" data-k="c"><span class="lab">빗변</span><span class="field"><input id="f-c" inputmode="decimal" placeholder="?" aria-label="빗변"></span><span class="how"></span></div>
+    <div class="box" data-k="A"><span class="lab">각 A</span><span class="field"><input id="f-A" inputmode="decimal" placeholder="?" aria-label="각 A (도)"><span class="u">°</span></span><span class="how"></span></div>
+    <div class="box" data-k="B"><span class="lab">각 B</span><span class="field"><input id="f-B" inputmode="decimal" placeholder="?" aria-label="각 B (도)"><span class="u">°</span></span><span class="how"></span></div>
+  </div>
+</main>
+
+<script>
+const K=['a','b','c','A','B'],box={},inp={};
+K.forEach(k=>{box[k]=document.querySelector(`.box[data-k="${k}"]`);inp[k]=document.getElementById('f-'+k)});
+const stage=document.getElementById('stage'),svg=document.getElementById('svg'),msg=document.getElementById('msg');
+const R=Math.PI/180;
+let given=[];
+
+function num(k){const s=inp[k].value.replace(',','.').trim();if(s==='')return NaN;return Number(s)}
+function fmt(v,ang){return String(Number(v.toFixed(ang?2:3)))}
+
+K.forEach(k=>inp[k].addEventListener('input',()=>{
+  given=given.filter(x=>x!==k);
+  if(inp[k].value.trim()!==''){given.push(k);if(given.length>2)given.shift()}
+  solve();
+}));
+document.getElementById('clear').onclick=()=>{given=[];K.forEach(k=>inp[k].value='');solve();inp.a.focus()};
+
+function solve(){
+  const v={};given.forEach(k=>v[k]=num(k));
+  let out=null,how={},err='';
+  if(given.length<2){err=given.length?'칸 하나만 더 넣어주세요':'아무 칸이나 두 개 넣어보세요'}
+  else if(given.some(k=>!(v[k]>0)))err='0보다 큰 숫자를 넣어주세요';
+  else if(given.some(k=>(k==='A'||k==='B')&&v[k]>=90))err='각도는 90°보다 작아야 합니다';
+  else if(given.includes('A')&&given.includes('B'))err='각도만으로는 크기를 알 수 없어요. 변 하나를 넣어주세요';
+  else{
+    let{a,b,c}=v,A=v.A;
+    if(v.B!==undefined){A=90-v.B;how.A='90° − B'}
+    else if(A!==undefined)how.B='90° − A';
+    if(A===undefined){
+      if(a&&b){c=Math.hypot(a,b);A=Math.atan(a/b)/R;how={c:'√(높이²+밑변²)',A:'tan⁻¹(높이÷밑변)'}}
+      else if(a&&c){if(c<=a)err='빗변은 높이보다 길어야 합니다';else{b=Math.sqrt(c*c-a*a);A=Math.asin(a/c)/R;how={b:'√(빗변²−높이²)',A:'sin⁻¹(높이÷빗변)'}}}
+      else{if(c<=b)err='빗변은 밑변보다 길어야 합니다';else{a=Math.sqrt(c*c-b*b);A=Math.acos(b/c)/R;how={a:'√(빗변²−밑변²)',A:'cos⁻¹(밑변÷빗변)'}}}
+      how.B='90° − A';
+    }else{
+      const s=Math.sin(A*R),co=Math.cos(A*R),t=Math.tan(A*R);
+      if(a){b=a/t;c=a/s;Object.assign(how,{b:'높이 ÷ tan A',c:'높이 ÷ sin A'})}
+      else if(b){a=b*t;c=b/co;Object.assign(how,{a:'밑변 × tan A',c:'밑변 ÷ cos A'})}
+      else{a=c*s;b=c*co;Object.assign(how,{a:'빗변 × sin A',b:'빗변 × cos A'})}
+    }
+    if(!err)out={a,b,c,A,B:90-A};
+  }
+  K.forEach(k=>{
+    const g=given.includes(k);
+    box[k].classList.toggle('given',g);box[k].classList.toggle('calc',!g&&!!out);
+    box[k].querySelector('.how').textContent=(!g&&out)?how[k]||'':'';
+    if(!g)inp[k].value=out?fmt(out[k],k==='A'||k==='B'):'';
+  });
+  msg.textContent=err;msg.classList.toggle('err',given.length>=2&&!!err);
+  draw(out);
+}
+
+function draw(out){
+  const W=stage.clientWidth,H=Math.max(380,Math.min(520,W*.95));stage.style.height=H+'px';
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const L=W<420?92:110,Rt=W<420?92:110,T=96,Bm=82,dx=W-L-Rt,dy=H-T-Bm;
+  const ratio=out?Math.min(5,Math.max(.2,out.a/out.b)):.75;
+  const s=Math.min(dx,dy/ratio),w=s,h=s*ratio;
+  const x0=L+(dx-w)/2,x1=x0+w,y1=T+(dy+h)/2,y0=y1-h;
+  const css=getComputedStyle(document.documentElement),col=n=>css.getPropertyValue(n).trim();
+  const sideCol=k=>!out?col('--line'):given.includes(k)?col('--given'):col('--calc');
+  const angCol=k=>!out?col('--muted'):given.includes(k)?col('--given'):col('--calc');
+  const fill=out?col('--calc'):'none';
+  const dash=out?'':'stroke-dasharray="6 5"';
+  const ra=Math.min(34,w*.35,h*.9+8),rb=Math.min(34,h*.35,w*.9+8),sq=Math.min(16,w*.25,h*.25);
+  const ang=Math.atan2(h,w);
+  svg.innerHTML=`
+    <polygon points="${x0},${y1} ${x1},${y1} ${x0},${y0}" fill="${fill}" fill-opacity=".08" stroke="none"/>
+    <line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="${sideCol('b')}" stroke-width="3" ${dash}/>
+    <line x1="${x0}" y1="${y1}" x2="${x0}" y2="${y0}" stroke="${sideCol('a')}" stroke-width="3" ${dash}/>
+    <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${sideCol('c')}" stroke-width="3" ${dash}/>
+    <polyline points="${x0+sq},${y1} ${x0+sq},${y1-sq} ${x0},${y1-sq}" fill="none" stroke="${col('--muted')}" stroke-width="1.5"/>
+    <path d="M${x1-ra},${y1} A${ra},${ra} 0 0 1 ${x1-ra*Math.cos(ang)},${y1-ra*Math.sin(ang)}" fill="none" stroke="${angCol('A')}" stroke-width="2"/>
+    <path d="M${x0},${y0+rb} A${rb},${rb} 0 0 0 ${x0+rb*Math.cos(ang)},${y0+rb*Math.sin(ang)}" fill="none" stroke="${angCol('B')}" stroke-width="2"/>
+    <text x="${x0+sq+6}" y="${y1-sq-6}" font-size="11" fill="${col('--muted')}" font-family="IBM Plex Mono, monospace">90°</text>`;
+  const place=(k,x,y)=>{box[k].style.left=Math.max(48,Math.min(W-48,x))+'px';box[k].style.top=Math.max(40,Math.min(H-26,y))+'px'};
+  place('b',(x0+x1)/2,y1+40);
+  place('a',x0-52,(y0+y1)/2);
+  const mx=(x0+x1)/2,my=(y0+y1)/2,nx=Math.sin(ang),ny=-Math.cos(ang);
+  place('c',mx+nx*58,my+ny*58);
+  place('A',x1+50,y1-14);
+  place('B',x0+20,y0-40);
+}
+addEventListener('resize',()=>solve());
+
+// 처음 열면 예시(높이 3, 밑변 4)로 채워진 상태
+inp.a.value='3';inp.b.value='4';given=['a','b'];solve();
+</script>
+
+</body>
+</html>
