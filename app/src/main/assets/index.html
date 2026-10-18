@@ -149,18 +149,27 @@ function names(){const n=cfg.names.split(/[,，]/).map(x=>x.trim()).filter(Boole
 function colorOf(name){const n=names();let i=n.indexOf(name);if(i<0)i=n.length+([...name].reduce((a,c)=>a+c.charCodeAt(0),0)%3);return `var(${COLORS[i%COLORS.length]})`}
 
 /* ── 기록 ── */
-function renderLines(stick){
-  const box=$('#log'),atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<70;
-  const w=$('#lines');w.innerHTML='';$('#logHint').hidden=S.lines.length>0;
-  S.lines.forEach(l=>{
-    const d=document.createElement('div');d.className='ln';
-    if(l.who){const who=document.createElement('span');who.className='who'+(l.fixed?'':' guess');who.style.color=colorOf(l.who);who.textContent=l.who;d.appendChild(who)}
-    const tx=document.createElement('span');tx.textContent=l.text;d.appendChild(tx);
-    d.onclick=()=>openLine(l.lid);w.appendChild(d);
-  });
-  if(stick||atBottom)box.scrollTop=box.scrollHeight;
+const MAXKEEP=1500; // 저장하는 최대 줄 수 (넘으면 오래된 줄부터 지움)
+function lineEl(l){
+  const d=document.createElement('div');d.className='ln';
+  if(l.who){const who=document.createElement('span');who.className='who'+(l.fixed?'':' guess');who.style.color=colorOf(l.who);who.textContent=l.who;d.appendChild(who)}
+  const tx=document.createElement('span');tx.textContent=l.text;d.appendChild(tx);
+  d.onclick=()=>openLine(l.lid);return d;
 }
-function addLine(text){text=String(text||'').trim();if(!text)return;S.lines.push({lid:S.lid++,text,who:'',fixed:false});save();renderLines()}
+function nearBottom(){const b=$('#log');return b.scrollHeight-b.scrollTop-b.clientHeight<70}
+function renderLines(stick){
+  const at=nearBottom();
+  const w=$('#lines');w.innerHTML='';$('#logHint').hidden=S.lines.length>0;
+  const f=document.createDocumentFragment();S.lines.forEach(l=>f.appendChild(lineEl(l)));w.appendChild(f);
+  if(stick||at)$('#log').scrollTop=$('#log').scrollHeight;
+}
+function addLine(text){
+  text=String(text||'').trim();if(!text)return;
+  const l={lid:S.lid++,text,who:'',fixed:false};S.lines.push(l);
+  if(S.lines.length>MAXKEEP){S.lines.splice(0,S.lines.length-MAXKEEP);save();renderLines();return}
+  save();const at=nearBottom();$('#logHint').hidden=true;$('#lines').appendChild(lineEl(l));
+  if(at)$('#log').scrollTop=$('#log').scrollHeight;
+}
 
 /* ── 앱(녹음)에서 불리는 함수들 ── */
 window.onPartial=t=>{$('#interim').textContent=t||'';if(t){const b=$('#log');if(b.scrollHeight-b.scrollTop-b.clientHeight<90)b.scrollTop=b.scrollHeight}};
@@ -226,7 +235,12 @@ ${cfg.ctx?'상황: '+cfg.ctx+'\n':''}
 기록 (${recent.length}줄):
 ${txt}`;
 }
-function grab(buf,key){const m=buf.match(new RegExp('"'+key+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'));if(!m)return null;try{return JSON.parse('"'+m[1]+'"')}catch(e){return m[1]}}
+// 받는 중인 글에서 "키":"값" 을 꺼냄. 아직 닫히지 않은 값도 지금까지 온 만큼 꺼낸다.
+function grab(buf,key){
+  const m=buf.match(new RegExp('"'+key+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)("?)'));if(!m)return null;
+  let v=m[1];if(v.endsWith('\\'))v=v.slice(0,-1);
+  try{return JSON.parse('"'+v+'"')}catch(e){return v}
+}
 function renderAdvice(){
   const a=S.advice;$('#adEmpty').hidden=!!a;$('#adBody').hidden=!a;if(!a)return;
   $('#adNow').textContent=a.대응||'';
@@ -242,21 +256,24 @@ function renderAdvice(){
     p.appendChild(d)});
 }
 
-let busy=false,buf='',snapshot=[];
+let busy=false,buf='',snapshot=[],curId=-1,prev=null;
 function anaIdle(label){busy=false;const b=$('#bAna');b.disabled=false;b.textContent=label||'분석';if(label)setTimeout(()=>{if(!busy)b.textContent='분석'},2500)}
-window.onAnaDelta=t=>{
-  if(!busy)return;buf+=t;
+window.onAnaDelta=(id,t)=>{
+  if(!busy||id!==String(curId))return;buf+=t;
   const now=grab(buf,'대응');
   if(now!==null){const live=Object.assign({},S.advice||{});live.대응=now;const av=grab(buf,'피할것');live.피할것=av||'';const fl=grab(buf,'흐름');live.흐름=fl||'';live.사람=[];live.note='받는 중…';S.advice=live;renderAdvice()}
 };
-window.onAnaDone=stop=>{
-  if(!busy)return;
+window.onAnaDone=(id,stop)=>{
+  if(!busy||id!==String(curId))return;
   let a=null;
   try{a=JSON.parse(buf.slice(buf.indexOf('{'),buf.lastIndexOf('}')+1))}catch(e){}
   if(!a||typeof a!=='object'){
     const now=grab(buf,'대응');
     a={대응:now||'분석 결과를 읽지 못했습니다. 다시 눌러 주세요.',피할것:grab(buf,'피할것')||'',흐름:grab(buf,'흐름')||''};
-    a.note=stop==='max_tokens'?'답이 길어 일부만 받았습니다 (화자 추정 빠짐).':'';
+    // 화자 표가 중간에 잘렸으면 받은 데까지만 쓴다
+    const hi=buf.indexOf('"화자"');a.화자={};
+    if(hi>=0){const re=/"(\d+)"\s*:\s*"([^"]*)"/g;let m;const tail=buf.slice(hi);while((m=re.exec(tail)))a.화자[m[1]]=m[2]}
+    a.note=stop==='max_tokens'?'답이 길어 일부만 받았습니다.':'';
   }else a.note='';
   // 화자: 줄 번호 → 이름 (분석 시작 때 줄 기준이라 그사이 새로 들어온 줄은 건드리지 않음)
   if(a.화자&&typeof a.화자==='object'){
@@ -264,17 +281,18 @@ window.onAnaDone=stop=>{
   }
   delete a.화자;S.advice=a;save();renderLines();renderAdvice();anaIdle();
 };
-window.onAnaError=msg=>{if(!busy)return;$('#adNote').textContent='';if(S.advice)S.advice.note='';anaIdle();$('#recMsg').textContent=msg;$('#recMsg').hidden=false};
+function restorePrev(){S.advice=prev;renderAdvice()}
+window.onAnaError=(id,msg)=>{if(!busy||id!==String(curId))return;restorePrev();anaIdle();$('#recMsg').textContent=msg;$('#recMsg').hidden=false};
 
 $('#bAna').onclick=()=>{
-  if(busy){if(A)A.cancelAsk();anaIdle('취소함');return}
+  if(busy){if(A)A.cancelAsk();restorePrev();anaIdle('취소함');return}
   if(!S.lines.length){anaIdle('기록 없음');return}
   if(!A){anaIdle('앱에서만 됨');return}
   if(!cfg.key){anaIdle('키 먼저');$('#bSet').click();return}
-  busy=true;buf='';snapshot=recentLines().map(l=>l.lid);
+  busy=true;buf='';prev=S.advice;snapshot=recentLines().map(l=>l.lid);
   $('#bAna').textContent='분석 중… (누르면 취소)';
-  const body={model:cfg.model,max_tokens:3000,stream:true,messages:[{role:'user',content:buildPrompt()}]};
-  A.ask(cfg.key,JSON.stringify(body));
+  const body={model:cfg.model,max_tokens:8000,stream:true,messages:[{role:'user',content:buildPrompt()}]};
+  curId=A.ask(cfg.key,JSON.stringify(body));
 };
 
 renderLines(true);renderAdvice();

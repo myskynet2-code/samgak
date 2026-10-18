@@ -39,17 +39,20 @@ public class MainActivity extends Activity {
 
     private static final int REQ_MIC = 1;
     // 음성 인식 다시 켤 때 나는 '띵' 소리를 막으려고 잠시 끄는 소리 종류
-    private static final int[] MUTE_STREAMS = {
-            AudioManager.STREAM_MUSIC, AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM };
+    // (알림·시스템 소리는 벨소리 모드와 묶인 폰이 많아 건드리지 않음)
+    private static final int[] MUTE_STREAMS = { AudioManager.STREAM_MUSIC };
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private WebView web;
     private SpeechRecognizer sr;
     private SharedPreferences prefs;
 
-    private boolean wantListening = false; // 사용자가 녹음을 켜 둔 상태인가
+    private volatile boolean wantListening = false; // 사용자가 녹음을 켜 둔 상태인가
     private int session = 0;               // 오래된 콜백 무시용 번호
     private int netFails = 0;
+    private int softFails = 0;             // 말 없음 외의 연속 실패 횟수
+    private long lastEvent = 0;            // 음성 인식에서 마지막으로 소식이 온 시각
+    private boolean watchdogOn = false;
     private volatile int askId = 0;        // 분석 요청 번호 (취소·중복 방지)
 
     @Override
@@ -77,13 +80,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void stop() { main.post(() -> stopListening("")); }
 
+        // 요청 번호를 돌려줌. 화면은 이 번호가 아닌 응답은 버린다.
         @JavascriptInterface
-        public boolean isListening() { return wantListening; }
-
-        @JavascriptInterface
-        public void ask(String key, String body) {
+        public int ask(String key, String body) {
             final int id = ++askId;
             new Thread(() -> doAsk(id, key, body)).start();
+            return id;
         }
 
         @JavascriptInterface
@@ -130,18 +132,25 @@ public class MainActivity extends Activity {
         }
         wantListening = true;
         netFails = 0;
+        softFails = 0;
+        lastEvent = System.currentTimeMillis();
+        if (!watchdogOn) { watchdogOn = true; main.postDelayed(watchdog, 5000); }
         muteBeep();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         js("onRecState", "on", "");
         startRecognizer();
     }
 
-    private void startRecognizer() {
+    // 같은 인식기를 다시 쓰면 끊기는 틈이 짧다. 오류가 났을 때만 새로 만든다.
+    private void startRecognizer() { startRecognizer(false); }
+
+    private void startRecognizer(boolean fresh) {
         if (!wantListening) return;
-        destroyRecognizer();
+        if (fresh) destroyRecognizer();
         final int my = ++session;
+        lastEvent = System.currentTimeMillis();
         try {
-            sr = SpeechRecognizer.createSpeechRecognizer(this);
+            if (sr == null) sr = SpeechRecognizer.createSpeechRecognizer(this);
             sr.setRecognitionListener(new Listener(my));
             Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -155,13 +164,32 @@ public class MainActivity extends Activity {
             i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L);
             sr.startListening(i);
         } catch (Exception e) {
-            scheduleRestart(600);
+            destroyRecognizer();
+            countSoftFail();
+            scheduleRestart(600, true);
         }
     }
 
-    private void scheduleRestart(long ms) {
+    private void scheduleRestart(long ms) { scheduleRestart(ms, false); }
+
+    private void scheduleRestart(long ms, boolean fresh) {
         final int my = session;
-        main.postDelayed(() -> { if (wantListening && my == session) startRecognizer(); }, ms);
+        main.postDelayed(() -> { if (wantListening && my == session) startRecognizer(fresh); }, ms);
+    }
+
+    // 인식기가 아무 소식 없이 멈춰 버리는 폰이 있어서, 15초 넘게 조용하면 새로 켠다
+    private final Runnable watchdog = new Runnable() {
+        @Override public void run() {
+            if (!wantListening) { watchdogOn = false; return; }
+            if (System.currentTimeMillis() - lastEvent > 15000) startRecognizer(true);
+            main.postDelayed(this, 5000);
+        }
+    };
+
+    private void countSoftFail() {
+        softFails++;
+        if (softFails == 25) js("onRecState", "warn", "음성 인식이 자꾸 끊깁니다. 계속 다시 시도 중…");
+        if (softFails >= 60) stopListening("음성 인식이 계속 실패해서 멈췄습니다. 앱을 껐다 켜거나 'Google' 앱을 업데이트해 주세요.");
     }
 
     private void destroyRecognizer() {
@@ -185,14 +213,18 @@ public class MainActivity extends Activity {
     private class Listener implements RecognitionListener {
         private final int my;
         Listener(int my) { this.my = my; }
-        private boolean stale() { return my != session || !wantListening; }
+        private boolean stale() {
+            if (my != session || !wantListening) return true;
+            lastEvent = System.currentTimeMillis();
+            return false;
+        }
 
         @Override public void onReadyForSpeech(Bundle params) {
             if (stale()) return;
             js("onRecState", "on", "");
         }
         @Override public void onBeginningOfSpeech() { }
-        @Override public void onRmsChanged(float rmsdB) { }
+        @Override public void onRmsChanged(float rmsdB) { if (my == session) lastEvent = System.currentTimeMillis(); }
         @Override public void onBufferReceived(byte[] buffer) { }
         @Override public void onEndOfSpeech() { }
         @Override public void onEvent(int eventType, Bundle params) { }
@@ -207,6 +239,7 @@ public class MainActivity extends Activity {
             if (stale()) return;
             session++; // 이 인식은 끝. 늦게 오는 오류 콜백은 무시
             netFails = 0;
+            softFails = 0;
             String t = first(b);
             if (t != null && !t.trim().isEmpty()) js("onFinal", t);
             else js("onPartial", "");
@@ -235,11 +268,17 @@ public class MainActivity extends Activity {
                         return;
                     }
                     js("onRecState", "warn", "연결이 불안정합니다. 다시 붙는 중…");
-                    scheduleRestart(Math.min(800L * netFails, 5000L));
+                    scheduleRestart(Math.min(800L * netFails, 5000L), true);
                     return;
-                default: // 말 없음(6,7), 바쁨(8), 기타(3,5): 잠깐 쉬고 다시
+                case 6: // 말 없음
+                case 7: // 알아들은 말 없음
                     js("onPartial", "");
-                    scheduleRestart(error == 8 ? 600 : 300);
+                    scheduleRestart(250);
+                    return;
+                default: // 바쁨(8), 오디오(3), 기타(5): 인식기를 새로 만들어 다시
+                    js("onPartial", "");
+                    countSoftFail();
+                    if (wantListening) scheduleRestart(error == 8 ? 700 : 400, true);
             }
         }
 
@@ -252,6 +291,7 @@ public class MainActivity extends Activity {
 
     // ───────── '띵' 소리 막기 (녹음 중에만) ─────────
     private void muteBeep() {
+        if (!prefs.getString("muted", "").isEmpty()) return; // 이미 꺼 둔 기록이 있으면 덮어쓰지 않음
         AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
         StringBuilder done = new StringBuilder();
         for (int st : MUTE_STREAMS) {
@@ -305,7 +345,7 @@ public class MainActivity extends Activity {
                 else if (code == 400 && msg.toLowerCase().contains("credit")) nice = "충전 잔액이 없습니다. console.anthropic.com 에서 충전해 주세요.";
                 else if (code == 429 || code == 529) nice = "요청이 몰렸습니다. 잠시 뒤 다시 눌러 주세요.";
                 else nice = "오류 " + code + (msg.isEmpty() ? "" : ": " + msg);
-                if (id == askId) js("onAnaError", nice);
+                if (id == askId) js("onAnaError", String.valueOf(id), nice);
                 return;
             }
 
@@ -321,19 +361,19 @@ public class MainActivity extends Activity {
                 String type = ev.optString("type");
                 if ("content_block_delta".equals(type)) {
                     JSONObject d = ev.optJSONObject("delta");
-                    if (d != null && "text_delta".equals(d.optString("type"))) js("onAnaDelta", d.optString("text"));
+                    if (d != null && "text_delta".equals(d.optString("type"))) js("onAnaDelta", String.valueOf(id), d.optString("text"));
                 } else if ("message_delta".equals(type)) {
                     JSONObject d = ev.optJSONObject("delta");
                     if (d != null) stop = d.optString("stop_reason", stop);
                 } else if ("error".equals(type)) {
                     JSONObject e = ev.optJSONObject("error");
-                    js("onAnaError", "분석 중 끊김: " + (e == null ? "" : e.optString("message")));
+                    if (id == askId) js("onAnaError", String.valueOf(id), "분석 중 끊김: " + (e == null ? "" : e.optString("message")));
                     return;
                 }
             }
-            if (id == askId) js("onAnaDone", stop);
+            if (id == askId) js("onAnaDone", String.valueOf(id), stop);
         } catch (Exception e) {
-            if (id == askId) js("onAnaError", "인터넷 연결을 확인해 주세요. (" + e.getClass().getSimpleName() + ")");
+            if (id == askId) js("onAnaError", String.valueOf(id), "인터넷 연결을 확인해 주세요. (" + e.getClass().getSimpleName() + ")");
         } finally {
             if (c != null) c.disconnect();
         }
