@@ -302,7 +302,7 @@ public class MainActivity extends Activity {
                 done.append(st);
             } catch (Exception ignored) { } // 방해 금지 모드 등에서 거부될 수 있음
         }
-        prefs.edit().putString("muted", done.toString()).apply();
+        prefs.edit().putString("muted", done.toString()).commit(); // 바로 기록 (앱이 갑자기 꺼져도 다음에 되돌리도록)
     }
 
     private void unmuteBeep() { restoreVolume(); }

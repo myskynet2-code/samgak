@@ -205,7 +205,8 @@ $('#bSet').onclick=()=>{$('#stNames').value=cfg.names;$('#stCtx').value=cfg.ctx;
 $('#stOk').onclick=()=>{cfg={names:$('#stNames').value.trim(),ctx:$('#stCtx').value.trim(),key:$('#stKey').value.trim(),model:$('#stModel').value};store.set('cfg',cfg);renderLines();$('#shSet').hidden=true};
 let newArm=false;
 $('#stNew').onclick=()=>{if(!newArm){newArm=true;$('#stNewMsg').hidden=false;setTimeout(()=>{newArm=false;$('#stNewMsg').hidden=true},3000);return}
-  S={lines:[],lid:1,advice:null};save();renderLines(true);renderAdvice();newArm=false;$('#shSet').hidden=true};
+  if(busy){if(A)A.cancelAsk();live=null;anaIdle()}
+  S={lines:[],lid:S.lid,advice:null};save();renderLines(true);renderAdvice();newArm=false;$('#shSet').hidden=true};
 
 /* 가리기 */
 $('#bHide').onclick=()=>{$('#cover').hidden=false};
@@ -241,8 +242,9 @@ function grab(buf,key){
   let v=m[1];if(v.endsWith('\\'))v=v.slice(0,-1);
   try{return JSON.parse('"'+v+'"')}catch(e){return v}
 }
+let live=null; // 받는 중인 분석 (저장하지 않음)
 function renderAdvice(){
-  const a=S.advice;$('#adEmpty').hidden=!!a;$('#adBody').hidden=!a;if(!a)return;
+  const a=live||S.advice;$('#adEmpty').hidden=!!a;$('#adBody').hidden=!a;if(!a)return;
   $('#adNow').textContent=a.대응||'';
   $('#adAvoid').textContent=a.피할것?'피할 것: '+a.피할것:'';
   $('#adFlow').textContent=a.흐름?'흐름: '+a.흐름:'';
@@ -256,12 +258,12 @@ function renderAdvice(){
     p.appendChild(d)});
 }
 
-let busy=false,buf='',snapshot=[],curId=-1,prev=null;
+let busy=false,buf='',snapshot=[],curId=-1;
 function anaIdle(label){busy=false;const b=$('#bAna');b.disabled=false;b.textContent=label||'분석';if(label)setTimeout(()=>{if(!busy)b.textContent='분석'},2500)}
 window.onAnaDelta=(id,t)=>{
   if(!busy||id!==String(curId))return;buf+=t;
   const now=grab(buf,'대응');
-  if(now!==null){const live=Object.assign({},S.advice||{});live.대응=now;const av=grab(buf,'피할것');live.피할것=av||'';const fl=grab(buf,'흐름');live.흐름=fl||'';live.사람=[];live.note='받는 중…';S.advice=live;renderAdvice()}
+  if(now!==null){live={대응:now,피할것:grab(buf,'피할것')||'',흐름:grab(buf,'흐름')||'',사람:[],note:'받는 중…'};renderAdvice()}
 };
 window.onAnaDone=(id,stop)=>{
   if(!busy||id!==String(curId))return;
@@ -279,9 +281,9 @@ window.onAnaDone=(id,stop)=>{
   if(a.화자&&typeof a.화자==='object'){
     snapshot.forEach((lid,i)=>{const l=S.lines.find(x=>x.lid===lid);const w=a.화자[String(i+1)];if(l&&!l.fixed&&w)l.who=String(w).slice(0,20)});
   }
-  delete a.화자;S.advice=a;save();renderLines();renderAdvice();anaIdle();
+  delete a.화자;live=null;S.advice=a;save();renderLines();renderAdvice();anaIdle();
 };
-function restorePrev(){S.advice=prev;renderAdvice()}
+function restorePrev(){live=null;renderAdvice()}
 window.onAnaError=(id,msg)=>{if(!busy||id!==String(curId))return;restorePrev();anaIdle();$('#recMsg').textContent=msg;$('#recMsg').hidden=false};
 
 $('#bAna').onclick=()=>{
@@ -289,7 +291,7 @@ $('#bAna').onclick=()=>{
   if(!S.lines.length){anaIdle('기록 없음');return}
   if(!A){anaIdle('앱에서만 됨');return}
   if(!cfg.key){anaIdle('키 먼저');$('#bSet').click();return}
-  busy=true;buf='';prev=S.advice;snapshot=recentLines().map(l=>l.lid);
+  busy=true;buf='';live=null;snapshot=recentLines().map(l=>l.lid);
   $('#bAna').textContent='분석 중… (누르면 취소)';
   const body={model:cfg.model,max_tokens:8000,stream:true,messages:[{role:'user',content:buildPrompt()}]};
   curId=A.ask(cfg.key,JSON.stringify(body));

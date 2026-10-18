@@ -10,8 +10,8 @@ android {
         applicationId 'com.myskynet2.talkflow'
         minSdk 26
         targetSdk 34
-        versionCode 2
-        versionName '1.1'
+        versionCode 3
+        versionName '1.2'
     }
 
     // 현장계산기와 같은 개인 설치용 서명 (업데이트 때 덮어 설치되도록 고정)
