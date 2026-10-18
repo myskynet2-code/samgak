@@ -1,8 +1,8 @@
-name: 앱 만들기
+name: 대화 흐름판 앱 만들기
 
 on:
   push:
-    branches: [main]
+    branches: [talk-flow]
   workflow_dispatch:
 
 permissions:
@@ -27,12 +27,13 @@ jobs:
         run: gradle assembleDebug --no-daemon
 
       - name: 이름 정리
-        run: cp app/build/outputs/apk/debug/app-debug.apk samgak.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk talkflow.apk
 
       - name: 받는 곳에 올리기
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: 직각삼각형 풀이판 ${{ github.run_number }}
-          files: samgak.apk
-          make_latest: true
+          tag_name: talk-v1.0.${{ github.run_number }}
+          name: 대화 흐름판 ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          files: talkflow.apk
+          make_latest: false

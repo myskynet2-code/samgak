@@ -2,48 +2,283 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>현장계산기</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>대화 흐름판</title>
 <style>
-/* 두 계산기와 같은 모눈종이 바탕. 큰 카드 두 장으로 고르는 첫 화면 */
-:root{--bg:#f3f6f7;--grid:rgba(40,90,110,.08);--ink:#18303a;--muted:#5d7480;--box:#ffffff;--line:#c9d6dc;--blue:#1d4fa8;--green:#0f7a5c;
-  --sans:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
-@media (prefers-color-scheme: dark){:root{--bg:#0f1a1f;--grid:rgba(140,190,210,.07);--ink:#dbe7ec;--muted:#8ea5b0;--box:#16252c;--line:#2c4049;--blue:#7fa8ff;--green:#5fd1a8;color-scheme:dark}}
-html,body{margin:0;min-height:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:20px 20px;
-  padding:calc(28px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));box-sizing:border-box}
-.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
-h1{font-size:1.6rem;margin:0;letter-spacing:.02em}
-.sub{margin:0 0 8px;color:var(--muted);font-size:.92rem}
-a.card{display:flex;gap:16px;align-items:center;text-decoration:none;color:inherit;background:var(--box);border:1.5px solid var(--line);border-radius:16px;padding:18px 16px;min-height:92px}
-a.card:active{transform:scale(.99)}
-a.card:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.ic{flex:none;width:64px;height:64px;border-radius:14px;display:grid;place-items:center}
-.tri .ic{background:color-mix(in srgb,var(--blue) 12%,transparent)}
-.ves .ic{background:color-mix(in srgb,var(--green) 12%,transparent)}
-.t{font-size:1.12rem;font-weight:700;margin:0 0 4px}
-.d{font-size:.86rem;color:var(--muted);margin:0;line-height:1.45}
-a.card.tri{border-left:5px solid var(--blue)} a.card.ves{border-left:5px solid var(--green)}
-.foot{color:var(--muted);font-size:.78rem;text-align:center;margin-top:6px}
+/* 어두운 단일 화면: 대화 중 힐끗 보는 용도라 눈에 덜 띄게.
+   위 = 지금 할 말(크게) / 가운데 = 기록 / 아래 = 큰 버튼 두 개 */
+:root{
+  --bg:#121614; --panel:#1b211e; --fg:#e7ece9; --mute:#93a09a; --line:#2c3531;
+  --accent:#6fbf9f; --accent-fg:#0d1210; --warn:#e3a073; --rec:#ff6b5e; --rec-fg:#1a0d0b;
+  --s1:#6fbf9f; --s2:#c39ad3; --s3:#e5a35f; --s4:#7fb3e0; --s5:#c9c96a; --s6:#e38aa5;
+  --body:"Noto Sans KR","Apple SD Gothic Neo",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;display:flex;flex-direction:column;
+  padding:0 max(14px,env(safe-area-inset-right,0px)) 0 max(14px,env(safe-area-inset-left,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+button{font:inherit;color:inherit;cursor:pointer}
+
+header{display:flex;align-items:center;gap:8px;padding:10px 0 8px}
+header h1{font-size:15px;margin:0;font-weight:700;flex:1}
+.ic{background:none;border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:14px}
+#status{font-size:13px;color:var(--mute)}
+#status.on{color:var(--rec);font-weight:700}
+#status.warn{color:var(--warn)}
+
+#advice{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px;max-height:46%;overflow-y:auto}
+#advice .now{font-size:20px;font-weight:700;line-height:1.45}
+#advice .avoid{font-size:15px;color:var(--warn);margin-top:6px}
+#advice .flow{font-size:14px;color:var(--mute);margin-top:6px}
+#advice .note{font-size:13px;color:var(--mute);margin-top:6px}
+#adEmpty{color:var(--mute);font-size:15px;line-height:1.55}
+#advice details{margin-top:8px}
+#advice summary{font-size:14px;color:var(--accent)}
+.person{border-top:1px solid var(--line);padding:8px 0;font-size:14.5px;line-height:1.5}
+.person b{font-size:15px}
+.person .q{color:var(--mute)}
+.person .alt{color:var(--mute);font-style:italic}
+
+#log{flex:1;min-height:0;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.ln{padding:6px 0;border-bottom:1px solid var(--line);font-size:17px;line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
+.ln .who{font-weight:700;margin-right:6px;font-size:13px;padding:1px 6px;border-radius:6px;border:1px solid currentColor;white-space:nowrap}
+.ln .who.guess::after{content:" 추정";font-weight:400;opacity:.7}
+#interim{color:var(--mute);font-size:17px;padding:6px 0}
+.hint{color:var(--mute);font-size:14px;padding:6px 0;line-height:1.5}
+
+#bottom{padding:8px 0 10px;display:flex;flex-direction:column;gap:8px}
+#recMsg{font-size:14px;color:var(--warn);line-height:1.45}
+.big{display:flex;gap:8px}
+.big button{flex:1;border:none;border-radius:14px;padding:17px 8px;font-size:19px;font-weight:700}
+#rec{background:var(--rec);color:var(--rec-fg)}
+#rec.on{background:var(--panel);color:var(--rec);border:2px solid var(--rec)}
+#bAna{background:var(--accent);color:var(--accent-fg)}
+#bAna:disabled{opacity:.6}
+.btn{border:none;border-radius:10px;padding:10px 14px;font-weight:700;font-size:15px}
+.btn.main{background:var(--accent);color:var(--accent-fg)}
+.btn.sub{background:transparent;border:1px solid var(--line)}
+
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:20}
+.sheet>div{background:var(--panel);width:100%;border-radius:14px 14px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));max-height:88%;overflow-y:auto}
+.sheet h2{font-size:16px;margin:0 0 10px}
+.sheet label{display:block;font-size:14px;color:var(--mute);margin:12px 0 4px}
+.sheet input,.sheet textarea,.sheet select{width:100%;font:inherit;font-size:16px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.sheet textarea{min-height:70px}
+.small{font-size:13px;color:var(--mute);line-height:1.5}
+.row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.pick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{border:2px solid currentColor;background:transparent;border-radius:999px;padding:8px 14px;font-weight:700;font-size:15px}
+
+#cover{position:fixed;inset:0;background:#000;z-index:30;display:flex;align-items:flex-end;justify-content:center;padding-bottom:40px;color:#333;font-size:13px}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
-<main class="wrap">
-  <h1>현장계산기</h1>
-  <p class="sub">현장에서 바로 쓰는 계산 도구 · 인터넷 없이 작동</p>
 
-  <a class="card tri" href="triangle.html">
-    <span class="ic"><svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true"><path d="M6 38 H38 L6 6 Z" fill="none" stroke="#1d4fa8" stroke-width="3" stroke-linejoin="round"/><path d="M6 31 H13 V38" fill="none" stroke="#1d4fa8" stroke-width="2"/></svg></span>
-    <span><p class="t">직각삼각형 계산</p><p class="d">변·각도 중 두 개만 넣으면 나머지가 그림 위에 바로 나옵니다</p></span>
-  </a>
+<header>
+  <h1>대화 흐름판</h1>
+  <span id="status">대기</span>
+  <button class="ic" id="bHide">가리기</button>
+  <button class="ic" id="bSet">설정</button>
+</header>
 
-  <a class="card ves" href="vessel.html">
-    <span class="ic"><svg width="48" height="44" viewBox="0 0 48 44" aria-hidden="true"><path d="M12 18 H36 A6 9 0 0 1 36 36 H12 A6 9 0 0 1 12 18 Z" fill="none" stroke="#0f7a5c" stroke-width="3"/><path d="M24 18 V8 M24 8 a3 3 0 1 1 3 -3" fill="none" stroke="#c4512c" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="27" r="2.5" fill="#c4512c"/></svg></span>
-    <span><p class="t">압력용기 무게·인양 센터</p><p class="d">지름·두께·재질과 노즐·새들을 넣으면 무게와 무게중심을 알려줍니다</p></span>
-  </a>
+<section id="advice">
+  <div id="adEmpty">「● 녹음」 누르고 대화하다가, 필요할 때 「분석」만 누르세요.<br>누가 한 말인지는 분석할 때 알아서 나눕니다.<br>처음엔 「설정」에서 Claude 사용 키를 넣어 주세요.</div>
+  <div id="adBody" hidden>
+    <div class="now" id="adNow"></div>
+    <div class="avoid" id="adAvoid"></div>
+    <div class="flow" id="adFlow"></div>
+    <div class="note" id="adNote"></div>
+    <details id="adDet"><summary>사람별 근거 보기</summary><div id="adPeople"></div></details>
+  </div>
+</section>
 
-  <p class="foot">계산값은 이론값입니다. 인양 장비는 여유율을 따로 잡으세요.</p>
-</main>
+<div id="log"><div class="hint" id="logHint">아직 기록이 없습니다. 기록 줄을 누르면 누구 말인지 고칠 수 있습니다.</div><div id="lines"></div><div id="interim"></div></div>
+
+<div id="bottom">
+  <div id="recMsg" hidden></div>
+  <div class="big">
+    <button id="rec">● 녹음</button>
+    <button id="bAna">분석</button>
+  </div>
+</div>
+
+<div id="cover" hidden>화면 아무 곳이나 누르면 다시 보입니다</div>
+
+<div class="sheet" id="shLine" hidden><div>
+  <h2>이 발언은 누구 말인가요?</h2>
+  <p class="small" id="lnText"></p>
+  <div class="pick" id="lnPick"></div>
+  <div class="row"><button class="btn sub" id="lnDel">발언 지우기</button><button class="btn sub" data-close>닫기</button></div>
+</div></div>
+
+<div class="sheet" id="shSet" hidden><div>
+  <h2>설정</h2>
+  <label for="stNames">참석자 이름 (쉼표로 구분, 맨 앞이 나)</label>
+  <input id="stNames" placeholder="나, 철수, 영희">
+  <p class="small">몰라도 됩니다. 비워 두면 「나, 상대1, 상대2」로 나눕니다.</p>
+  <label for="stCtx">상황 메모</label>
+  <textarea id="stCtx" placeholder="예: 두 사람 갈등 중재. 내 목표는 감정 가라앉히고 다음 만남 약속 잡기."></textarea>
+  <label for="stModel">분석 방식</label>
+  <select id="stModel">
+    <option value="claude-sonnet-5-5">정확하게 (조금 느림)</option>
+    <option value="claude-haiku-5-5">빠르게</option>
+  </select>
+  <label for="stKey">Claude 사용 키</label>
+  <input id="stKey" type="password" autocomplete="off" placeholder="sk-ant-...">
+  <p class="small">console.anthropic.com → API Keys → Create Key 에서 만들고, 먼저 충전해야 쓸 수 있습니다. 키는 이 휴대폰 앱 안에만 저장됩니다.</p>
+  <div class="row"><button class="btn main" id="stOk">저장</button><button class="btn sub" id="stNew">새 대화 시작</button><button class="btn sub" data-close>닫기</button></div>
+  <p class="small" id="stNewMsg" hidden>한 번 더 누르면 지금 기록이 지워집니다.</p>
+</div></div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const A=window.Android||null;
+const COLORS=['--s1','--s2','--s3','--s4','--s5','--s6'];
+const MAXL=120;
+const store={get(k,d){try{const v=localStorage.getItem('tf_'+k);return v?JSON.parse(v):d}catch(e){return d}},
+             set(k,v){try{localStorage.setItem('tf_'+k,JSON.stringify(v))}catch(e){}}};
+let S=store.get('state',null)||{lines:[],lid:1,advice:null};
+let cfg=Object.assign({names:'',ctx:'',key:'',model:'claude-sonnet-5-5'},store.get('cfg',{}));
+const save=()=>store.set('state',S);
+
+function names(){const n=cfg.names.split(/[,，]/).map(x=>x.trim()).filter(Boolean);return n.length?n:['나','상대1','상대2']}
+function colorOf(name){const n=names();let i=n.indexOf(name);if(i<0)i=n.length+([...name].reduce((a,c)=>a+c.charCodeAt(0),0)%3);return `var(${COLORS[i%COLORS.length]})`}
+
+/* ── 기록 ── */
+function renderLines(stick){
+  const box=$('#log'),atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<70;
+  const w=$('#lines');w.innerHTML='';$('#logHint').hidden=S.lines.length>0;
+  S.lines.forEach(l=>{
+    const d=document.createElement('div');d.className='ln';
+    if(l.who){const who=document.createElement('span');who.className='who'+(l.fixed?'':' guess');who.style.color=colorOf(l.who);who.textContent=l.who;d.appendChild(who)}
+    const tx=document.createElement('span');tx.textContent=l.text;d.appendChild(tx);
+    d.onclick=()=>openLine(l.lid);w.appendChild(d);
+  });
+  if(stick||atBottom)box.scrollTop=box.scrollHeight;
+}
+function addLine(text){text=String(text||'').trim();if(!text)return;S.lines.push({lid:S.lid++,text,who:'',fixed:false});save();renderLines()}
+
+/* ── 앱(녹음)에서 불리는 함수들 ── */
+window.onPartial=t=>{$('#interim').textContent=t||'';if(t){const b=$('#log');if(b.scrollHeight-b.scrollTop-b.clientHeight<90)b.scrollTop=b.scrollHeight}};
+window.onFinal=t=>{$('#interim').textContent='';addLine(t)};
+let recOn=false;
+window.onRecState=(state,msg)=>{
+  const st=$('#status'),b=$('#rec'),m=$('#recMsg');
+  if(state==='on'){recOn=true;st.textContent='듣는 중';st.className='on';m.hidden=true}
+  else if(state==='warn'){st.textContent=msg;st.className='warn'}
+  else{recOn=false;$('#interim').textContent='';st.textContent=state==='error'?'녹음 안 됨':'멈춤';st.className='';if(msg){m.textContent=msg;m.hidden=false}}
+  b.className=recOn?'on':'';b.textContent=recOn?'■ 멈춤':'● 녹음';
+};
+$('#rec').onclick=()=>{
+  if(!A){window.onRecState('error','녹음은 휴대폰 앱에서만 됩니다.');return}
+  if(recOn)A.stop();else{$('#recMsg').hidden=true;$('#status').textContent='준비 중';A.start()}
+};
+
+/* ── 시트 ── */
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('.sheet').hidden=true);
+document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{if(e.target===s)s.hidden=true}));
+let lineId=null;
+function openLine(lid){
+  lineId=lid;const l=S.lines.find(x=>x.lid===lid);if(!l)return;$('#lnText').textContent=l.text;
+  const p=$('#lnPick');p.innerHTML='';
+  const list=[...new Set([...names(),...S.lines.map(x=>x.who).filter(w=>w&&w!=='?')])];
+  list.forEach(n=>{const b=document.createElement('button');b.className='chip';b.style.color=colorOf(n);b.textContent=n;
+    b.onclick=()=>{l.who=n;l.fixed=true;save();renderLines();$('#shLine').hidden=true};p.appendChild(b)});
+  $('#shLine').hidden=false;
+}
+$('#lnDel').onclick=()=>{S.lines=S.lines.filter(l=>l.lid!==lineId);save();renderLines();$('#shLine').hidden=true};
+
+$('#bSet').onclick=()=>{$('#stNames').value=cfg.names;$('#stCtx').value=cfg.ctx;$('#stKey').value=cfg.key;$('#stModel').value=cfg.model;$('#stNewMsg').hidden=true;$('#shSet').hidden=false};
+$('#stOk').onclick=()=>{cfg={names:$('#stNames').value.trim(),ctx:$('#stCtx').value.trim(),key:$('#stKey').value.trim(),model:$('#stModel').value};store.set('cfg',cfg);renderLines();$('#shSet').hidden=true};
+let newArm=false;
+$('#stNew').onclick=()=>{if(!newArm){newArm=true;$('#stNewMsg').hidden=false;setTimeout(()=>{newArm=false;$('#stNewMsg').hidden=true},3000);return}
+  S={lines:[],lid:1,advice:null};save();renderLines(true);renderAdvice();newArm=false;$('#shSet').hidden=true};
+
+/* 가리기 */
+$('#bHide').onclick=()=>{$('#cover').hidden=false};
+$('#cover').onclick=()=>{$('#cover').hidden=true};
+
+/* ── 분석 ── */
+function recentLines(){return S.lines.slice(-MAXL)}
+function buildPrompt(){
+  const n=names(),me=n[0],recent=recentLines();
+  const txt=recent.map((l,i)=>`${i+1}. ${l.fixed?'['+l.who+'] ':''}${l.text}`).join('\n');
+  return `너는 대화 중인 사람이 휴대폰을 힐끗 보고 바로 대응할 수 있게 돕는 상담·중재 보조다. 사용자는 「${me}」다.
+참석자 이름(알려진 것): ${n.join(', ')}
+${cfg.ctx?'상황: '+cfg.ctx+'\n':''}
+아래 기록은 화자 표시 없이 휴대폰 음성 인식으로 받아 적은 것이다. 대괄호 [이름]은 사용자가 직접 정한 화자다. 인식 오류, 빠진 말, 한 줄에 두 사람 말이 섞인 경우가 있을 수 있다.
+
+할 일:
+1. 「대응」: 사용자가 지금 바로 할 수 있는 말 한두 문장. 최근 흐름에 무게를 둔다.
+2. 「피할것」: 지금 하면 안 되는 말이나 행동 한 문장.
+3. 「흐름」: 지금 분위기와 쟁점 한 문장.
+4. 「사람」: 사용자를 뺀 각 사람의 심리와 의도. 반드시 실제 발언을 짧게 인용해 근거로 붙이고, 다른 해석 가능성도 하나 붙인다. 근거가 약하면 그렇다고 쓴다.
+5. 「화자」: 각 줄 번호가 누구 말인지 내용·말투·흐름으로 추정. 대괄호 줄은 그대로. 판단이 안 서면 "?", 두 사람 말이 섞였으면 "민수/지영"처럼.
+모든 글은 짧게, 쉬운 존댓말로, 외래어는 피한다.
+
+아래 순서 그대로 JSON 하나만 출력한다(다른 글 없이):
+{"대응":"","피할것":"","흐름":"","사람":[{"이름":"","근거":"","심리":"","의도":"","다른해석":""}],"화자":{"1":"이름","2":"이름"}}
+
+기록 (${recent.length}줄):
+${txt}`;
+}
+function grab(buf,key){const m=buf.match(new RegExp('"'+key+'"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'));if(!m)return null;try{return JSON.parse('"'+m[1]+'"')}catch(e){return m[1]}}
+function renderAdvice(){
+  const a=S.advice;$('#adEmpty').hidden=!!a;$('#adBody').hidden=!a;if(!a)return;
+  $('#adNow').textContent=a.대응||'';
+  $('#adAvoid').textContent=a.피할것?'피할 것: '+a.피할것:'';
+  $('#adFlow').textContent=a.흐름?'흐름: '+a.흐름:'';
+  $('#adNote').textContent=a.note||'';
+  const p=$('#adPeople');p.innerHTML='';
+  const ppl=Array.isArray(a.사람)?a.사람:[];
+  $('#adDet').hidden=!ppl.length;
+  ppl.forEach(x=>{const d=document.createElement('div');d.className='person';
+    const h=document.createElement('b');h.textContent=x.이름||'';d.appendChild(h);
+    [['q','근거: ',x.근거],['','심리: ',x.심리],['','의도: ',x.의도],['alt','다른 해석: ',x.다른해석]].forEach(([c,l,v])=>{if(!v)return;const e=document.createElement('div');if(c)e.className=c;e.textContent=l+v;d.appendChild(e)});
+    p.appendChild(d)});
+}
+
+let busy=false,buf='',snapshot=[];
+function anaIdle(label){busy=false;const b=$('#bAna');b.disabled=false;b.textContent=label||'분석';if(label)setTimeout(()=>{if(!busy)b.textContent='분석'},2500)}
+window.onAnaDelta=t=>{
+  if(!busy)return;buf+=t;
+  const now=grab(buf,'대응');
+  if(now!==null){const live=Object.assign({},S.advice||{});live.대응=now;const av=grab(buf,'피할것');live.피할것=av||'';const fl=grab(buf,'흐름');live.흐름=fl||'';live.사람=[];live.note='받는 중…';S.advice=live;renderAdvice()}
+};
+window.onAnaDone=stop=>{
+  if(!busy)return;
+  let a=null;
+  try{a=JSON.parse(buf.slice(buf.indexOf('{'),buf.lastIndexOf('}')+1))}catch(e){}
+  if(!a||typeof a!=='object'){
+    const now=grab(buf,'대응');
+    a={대응:now||'분석 결과를 읽지 못했습니다. 다시 눌러 주세요.',피할것:grab(buf,'피할것')||'',흐름:grab(buf,'흐름')||''};
+    a.note=stop==='max_tokens'?'답이 길어 일부만 받았습니다 (화자 추정 빠짐).':'';
+  }else a.note='';
+  // 화자: 줄 번호 → 이름 (분석 시작 때 줄 기준이라 그사이 새로 들어온 줄은 건드리지 않음)
+  if(a.화자&&typeof a.화자==='object'){
+    snapshot.forEach((lid,i)=>{const l=S.lines.find(x=>x.lid===lid);const w=a.화자[String(i+1)];if(l&&!l.fixed&&w)l.who=String(w).slice(0,20)});
+  }
+  delete a.화자;S.advice=a;save();renderLines();renderAdvice();anaIdle();
+};
+window.onAnaError=msg=>{if(!busy)return;$('#adNote').textContent='';if(S.advice)S.advice.note='';anaIdle();$('#recMsg').textContent=msg;$('#recMsg').hidden=false};
+
+$('#bAna').onclick=()=>{
+  if(busy){if(A)A.cancelAsk();anaIdle('취소함');return}
+  if(!S.lines.length){anaIdle('기록 없음');return}
+  if(!A){anaIdle('앱에서만 됨');return}
+  if(!cfg.key){anaIdle('키 먼저');$('#bSet').click();return}
+  busy=true;buf='';snapshot=recentLines().map(l=>l.lid);
+  $('#bAna').textContent='분석 중… (누르면 취소)';
+  const body={model:cfg.model,max_tokens:3000,stream:true,messages:[{role:'user',content:buildPrompt()}]};
+  A.ask(cfg.key,JSON.stringify(body));
+};
+
+renderLines(true);renderAdvice();
+})();
+</script>
 </body>
 </html>

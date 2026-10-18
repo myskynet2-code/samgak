@@ -2,8 +2,7 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- 직각삼각형 + 원통 용기 -->
-    <path android:fillColor="#FFFFFF" android:pathData="M32,62 L58,62 L32,36 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M50,66 L72,66 A5,8 0 0 1 72,82 L50,82 A5,8 0 0 1 50,66 Z" />
-    <path android:fillColor="#F3B27A" android:pathData="M59,74 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0 Z" />
+    <!-- 말풍선 두 개 -->
+    <path android:fillColor="#FFFFFF" android:pathData="M30,36 L62,36 A4,4 0 0 1 66,40 L66,56 A4,4 0 0 1 62,60 L42,60 L34,67 L35,60 L30,60 A4,4 0 0 1 26,56 L26,40 A4,4 0 0 1 30,36 Z" />
+    <path android:fillColor="#8FD3B6" android:pathData="M50,50 L78,50 A4,4 0 0 1 82,54 L82,68 A4,4 0 0 1 78,72 L75,72 L76,79 L68,72 L54,72 A4,4 0 0 1 50,68 Z" />
 </vector>
