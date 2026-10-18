@@ -201,22 +201,22 @@ let rec=null,running=false,wake=null;
 function setStatus(t,on){const s=$('#status');s.textContent=t;s.className=on?'on':''}
 async function grabWake(){try{if('wakeLock' in navigator)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(running&&document.visibilityState==='visible')grabWake()});
-function recBlocked(){
+function recBlocked(why){
   running=false;updRec();setStatus('녹음 막힘');
   const m=$('#recMsg');m.hidden=false;
-  m.textContent='마이크 허용이 안 됐습니다. 주소창 왼쪽 자물쇠 → 권한 → 마이크 허용 후 다시 눌러 주세요. (크롬에서 열어야 합니다)';
+  m.textContent=why==='nosr'?'이 화면은 음성 인식이 안 됩니다. 주소를 복사해서 크롬 앱을 직접 열고 붙여 넣으세요. (Claude 앱이나 삼성 인터넷 안에서는 안 됩니다)':(why==='net'?'음성 인식 서버 연결이 안 됩니다. 인터넷 연결을 확인하세요.':'마이크 허용이 안 됐습니다. 주소창 왼쪽 자물쇠 → 권한 → 마이크 허용 후 다시 눌러 주세요. ('+(why||'')+')');
   $('#typeRow').hidden=false;
 }
 function startRec(){
-  if(!SR){recBlocked();return}
+  if(!SR){recBlocked('nosr');return}
   rec=new SR();rec.lang='ko-KR';rec.continuous=true;rec.interimResults=true;
   rec.onresult=e=>{let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)addLine(r[0].transcript);else interim+=r[0].transcript}
     $('#interim').textContent=interim;
     if(interim){const b=$('#log');if(b.scrollHeight-b.scrollTop-b.clientHeight<80)b.scrollTop=b.scrollHeight}};
-  rec.onerror=e=>{if(['not-allowed','service-not-allowed','audio-capture'].includes(e.error))recBlocked()};
+  rec.onerror=e=>{if(e.error==='network')recBlocked('net');else if(['not-allowed','service-not-allowed','audio-capture'].includes(e.error))recBlocked(e.error)};
   rec.onend=()=>{$('#interim').textContent='';if(running){try{rec.start()}catch(e){setTimeout(()=>{try{rec.start()}catch(_){}},300)}}};
-  try{rec.start();running=true;setStatus('듣는 중',true);grabWake()}catch(e){recBlocked();return}
+  try{rec.start();running=true;setStatus('듣는 중',true);grabWake()}catch(e){recBlocked(String(e.name||e));return}
   updRec();
 }
 function stopRec(){running=false;try{rec&&rec.stop()}catch(e){}setStatus('멈춤');if(wake){wake.release().catch(()=>{});wake=null}updRec()}
